@@ -1,3 +1,4 @@
+
 from modules.Data_Load import *
 
 PROGRAM_VERSION = "0.0.1"
@@ -21,7 +22,4 @@ X_test, y_test : {X_test.shape}, {y_test.shape}\n")
 
     print(speech_speaker_df.head(5))
 
-    
-
-    
-
+   
