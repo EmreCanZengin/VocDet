@@ -16,14 +16,14 @@ class ThresholdModel(ClassifierMixin, BaseEstimator):
         def threshold(y_proba):
             self.y_train_proba= y_proba.copy()
             n_classes = self.y_train_proba.shape[1]
-            # if onlyTrue:
-            #     class_idx = np.argmax(y_proba, axis= 1)
-            #     mask = self.model.classes_[class_idx] == y_train
-            #     self.y_train_proba = y_proba[mask]
+#             if onlyTrue:
+#                 class_idx = np.argmax(y_proba, axis= 1)
+#                 mask = self.model.classes_[class_idx] == y_train
+#                 self.y_train_proba = y_proba[mask]
 
-            if len(self.y_train_proba) < n_classes:
-                raise ValueError("This model requires that both the number of true classifications \
-and the number of samples be at least equal to the number of known classes.")
+#             if len(self.y_train_proba) < n_classes:
+#                 raise ValueError("This model requires that both the number of true classifications \
+# and the number of samples be at least equal to the number of known classes.")
             
             # th_vec = np.ones(shape= (n_classes,))
             # for class_ in range(n_classes):
@@ -63,7 +63,7 @@ and the number of samples be at least equal to the number of known classes.")
         y_pred[mask] = probable_classes[mask]
         return y_pred
 
-    def report(self, y_true, y_pred, when= "Training", average= "micro"):
+    def report(self, y_true, y_pred, when= "Training", average= "macro"):
 
         mask_unknown = y_true == -1
         y_true_unknown = y_true[mask_unknown]
@@ -72,22 +72,25 @@ and the number of samples be at least equal to the number of known classes.")
         y_pred_unknown = y_pred[mask_unknown]
         y_pred_known = y_pred[~mask_unknown]
 
-        recall = recall_score(y_pred=y_pred_known, y_true=y_true_known, average=average)
-        precision = precision_score(y_pred=y_pred_known, y_true=y_true_known, average=average)
         accuracy = accuracy_score(y_pred=y_pred_known, y_true=y_true_known)
-        jaccard = jaccard_score(y_true= y_true_known, y_pred= y_pred_known, average= average)
+        recall = recall_score(y_pred=y_pred_known, y_true=y_true_known, average=average, zero_division= np.nan)
+        precision = precision_score(y_pred=y_pred_known, y_true=y_true_known, average=average, zero_division= np.nan)
+        jaccard = jaccard_score(y_true= y_true_known, y_pred= y_pred_known, average= average, zero_division= 1)
 
-        recall_unknown = 1.0
-        precision_unknown = 1.0
-        jaccard_unknown = 1.0
-        accuracy_unknown = 1.0
+        recall_unknown = 0.0 
+        precision_unknown = 0.0
+        accuracy_unknown = 0.0
+        jaccard_unknown = 0.0
 
-
-        if len(y_pred_unknown) > 0:
-            recall_unknown = recall_score(y_pred=y_pred_unknown, y_true=y_true_unknown, average=average)
-            precision_unknown = precision_score(y_pred=y_pred_unknown, y_true=y_true_unknown, average=average)
-            jaccard_unknown = jaccard_score(y_true= y_true_unknown, y_pred= y_pred_unknown, average= average)
+        if len(y_pred_unknown)>0:
+            recall_unknown = recall_score(y_pred=y_pred_unknown, y_true=y_true_unknown, average=average, zero_division= np.nan)
+            precision_unknown = precision_score(y_pred=y_pred_unknown, y_true=y_true_unknown, average=average,zero_division=np.nan)
+            jaccard_unknown = jaccard_score(y_true= y_true_unknown, y_pred= y_pred_unknown, average= average, zero_division= 1.0)
             accuracy_unknown= accuracy_score(y_pred=y_pred_unknown, y_true=y_true_unknown)
+
+        else:
+            print("The model could not realize any unknown data. There might be no unknown class.")
+
         model_name = repr(self.model)
 
         report = f"""{model_name} Classifier for {when} Data in Open Set:

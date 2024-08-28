@@ -9,27 +9,10 @@ from sklearn.datasets import load_iris
 
 def cross_class_validation(model, X_data: Union[np.ndarray, pd.DataFrame], y_data: Union[np.ndarray, pd.DataFrame],k_folds: int, random_state= 42)-> \
     Tuple[Dict[str, List[float]], np.ndarray, object]:
-    """
-    ########################<br>
-    # TODO Write a description here<br>
-    ########################<br>
-    problem: i am not sure how to split classes for validation. is just one enough or not
 
-    params: 
-    model: a model that has these methods or attributes: `predict_proba()`, `fit()`
-    X_data: training data which might not be splited to training and validation data
-    y_data: training data labels which might not be splited to training and validation data
-    k_folds: the number of folds in cross validation part
-    random_state:
-
-    return:
-    scores_dict: the dictionary that contains accuracy, recall, precision, and jaccard scores of the given model
-    thresholds: overall threshold values
-    best_model: best threshold model
-    """
-    def update_dictionary(src: Dict[str, object], dest: Dict[str, object], i: int, j: int) -> None:
+    def update_dictionary(src: Dict[str, object], dest: Dict[str, object]) -> None:
         for key in dest.keys():
-            dest[key][i, j] = src[key]
+            dest[key] = src[key]
     
     best_model = None
 
@@ -38,6 +21,7 @@ def cross_class_validation(model, X_data: Union[np.ndarray, pd.DataFrame], y_dat
 
     try:
         best_model = None
+        best_score = 0.0
         # shuffle the dataset
         np.random.seed(random_state)
         idx = np.arange(X_data.shape[0])
@@ -57,16 +41,13 @@ def cross_class_validation(model, X_data: Union[np.ndarray, pd.DataFrame], y_dat
         classes = np.unique(y)
         k_class_folds = len(classes) 
         val_ratio = 1/ k_folds
-        n_instances = len(X_data)
 
         # should be calculated from k_class_folds
         n_known_classes = k_class_folds - 1;
-        dummy = np.zeros(shape= (k_class_folds, k_folds))
-        thresholds = np.ones(shape= (k_class_folds, k_folds, n_known_classes))
 
         score_types = ["accuracy_score", "recall_score", "precision_score", "jaccard_score",
                        "accuracy_score_unknown", "recall_score_unknown", "precision_score_unknown", "jaccard_score_unknown"]
-        scores_dict = {score_type: dummy.copy() for score_type in score_types}
+        scores_dict = {score_type: 0.0 for score_type in score_types}
       
         for k in range(k_class_folds):
             unknown_classes = classes[k]
@@ -79,11 +60,7 @@ def cross_class_validation(model, X_data: Union[np.ndarray, pd.DataFrame], y_dat
             X_known = X[~idx_unknown]
             y_known = y[~idx_unknown]
 
-            idx_instances = np.arange(len(X_known))
-
             n_known_classes = len(np.unique(y_known))
-            upper_thresholds = np.ones(shape= (k_folds, n_known_classes))
-
             for j in range(k_folds):
                 print(f"Model index: {k}-{j}")
                 X_train, X_val_known, y_train, y_val_known = train_test_split(X_known, y_known,stratify=y_known, random_state= j * 20, test_size= val_ratio)
@@ -95,23 +72,22 @@ def cross_class_validation(model, X_data: Union[np.ndarray, pd.DataFrame], y_dat
                 
                 th_model = ThresholdModel(model)
                 th_model = th_model.fit(X_train, y_train)
-                local_threshold = th_model.thresholds
-                upper_thresholds[j] = local_threshold
 
-                y_pred = th_model.predict(X_data)
-                src_dict = th_model.report(y_pred= y_pred, y_true= y_data)
-                update_dictionary(src= src_dict, dest= scores_dict, i= k, j= j)
+                y_pred = th_model.predict(X_val)
+                src_dict = th_model.report(y_pred= y_pred, y_true= y_val)
+                update_dictionary(src= src_dict, dest= scores_dict)
+                scores = np.array(list(scores_dict.values()))
+
                 if best_model is None:
                     best_model = th_model
-                    best_model_norm = np.linalg.norm(np.array(list(scores_dict.values())))
-                else:
-                    curr_norm = np.linalg.norm(np.array(list(scores_dict.values())))
-                    if curr_norm > best_model_norm:
-                        best_model = th_model
-                    
 
-            thresholds[k] = upper_thresholds
-        return scores_dict, thresholds, best_model
+                curr_norm = np.linalg.norm(scores)
+                prod = np.prod(scores)
+                if curr_norm > best_score and prod > 0:
+                    best_score = curr_norm
+                    best_model = th_model
+
+        return best_model
 
     except Exception as e:
         print(f"An error is occured: {str(e)} in cross class validation function")
