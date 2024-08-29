@@ -72,6 +72,10 @@ class ThresholdModel(ClassifierMixin, BaseEstimator):
         y_pred_unknown = y_pred[mask_unknown]
         y_pred_known = y_pred[~mask_unknown]
 
+        n_pred_unknown = np.sum(y_pred == -1)
+        n_true_unknown = np.sum(mask_unknown)
+
+
         accuracy = accuracy_score(y_pred=y_pred_known, y_true=y_true_known)
         recall = recall_score(y_pred=y_pred_known, y_true=y_true_known, average=average, zero_division= np.nan)
         precision = precision_score(y_pred=y_pred_known, y_true=y_true_known, average=average, zero_division= np.nan)
@@ -81,12 +85,15 @@ class ThresholdModel(ClassifierMixin, BaseEstimator):
         precision_unknown = 0.0
         accuracy_unknown = 0.0
         jaccard_unknown = 0.0
+        rat_pred_true_unknown = 0.0
 
         if len(y_pred_unknown)>0:
             recall_unknown = recall_score(y_pred=y_pred_unknown, y_true=y_true_unknown, average=average, zero_division= np.nan)
             precision_unknown = precision_score(y_pred=y_pred_unknown, y_true=y_true_unknown, average=average,zero_division=np.nan)
             jaccard_unknown = jaccard_score(y_true= y_true_unknown, y_pred= y_pred_unknown, average= average, zero_division= 1.0)
             accuracy_unknown= accuracy_score(y_pred=y_pred_unknown, y_true=y_true_unknown)
+            rat_pred_true_unknown = n_pred_unknown / n_true_unknown 
+
 
         else:
             print("The model could not realize any unknown data. There might be no unknown class.")
@@ -103,10 +110,12 @@ For Unknown Data Points:
             Accuracy: {accuracy_unknown}
             Recall: {recall_unknown}
             Precision: {precision_unknown}
-            Intersection: {jaccard_unknown}\n"""
+            Intersection: {jaccard_unknown}
+            Custom Unknown Score: {rat_pred_true_unknown}\n"""
         
         return {"accuracy_score": accuracy, "recall_score": recall, "precision_score": precision, "jaccard_score": jaccard,
-                "accuracy_score_unknown": accuracy_unknown, "recall_score_unknown": recall_unknown, "precision_score_unknown": precision_unknown, "jaccard_score_unknown": jaccard_unknown, "report": report}
+                "accuracy_score_unknown": accuracy_unknown, "recall_score_unknown": recall_unknown, "precision_score_unknown": precision_unknown, "jaccard_score_unknown": jaccard_unknown,
+                 "custom_unknown_score": rat_pred_true_unknown, "report": report}
 
     def set_thresholds(self, thresholds: np.ndarray)->None:
         try:
