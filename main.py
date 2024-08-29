@@ -1,90 +1,70 @@
-import os
-import librosa
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.preprocessing import minmax_scale
-from sklearn.decomposition import PCA
-from sklearn.model_selection import train_test_split
-from sklearn.svm import LinearSVC
-from sklearn.metrics import accuracy_score, confusion_matrix
+from modules.Data_Load import *
+from modules.Data_Processing import *
+from modules.threshold import *
+from modules.Cross_Class_Validation import * 
 
-dataset_dir = r"C:\Users\melis\OneDrive\Masaüstü\VocDetCode\50_speakers_audio_data"
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import FunctionTransformer, StandardScaler, MinMaxScaler
 
-def extract_mfcc_features(file_path, n_mfcc=13):
-    audio, sr = librosa.load(file_path, sr=None)
-    mfccs = librosa.feature.mfcc(y=audio, sr=sr, n_mfcc=n_mfcc)
-    mfccs = np.mean(mfccs.T, axis=0)
-    return mfccs
-
-all_mfcc_features = []
-
-for subdir, dirs, files in os.walk(dataset_dir):
-    for file in files:
-        if file.endswith('.wav'):
-            file_path = os.path.join(subdir, file)
-            mfcc_features = extract_mfcc_features(file_path)
-            all_mfcc_features.append(mfcc_features)
-
-all_mfcc_features = np.array(all_mfcc_features)
+from sklearn.svm import SVC, LinearSVC
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.neighbors import KNeighborsClassifier
 
 
-plt.figure(figsize=(12, 6))
-sns.heatmap(all_mfcc_features, cmap='viridis', cbar=True)
-plt.title('MFCC')
-plt.xlabel('MFCC')
-plt.ylabel('Ses Dosyaları')
-plt.show()
+PROGRAM_VERSION = "0.0.1"
+CURR_PATH = Path.cwd().absolute()
+ZIP_PATH = CURR_PATH / "archive.zip"
+DATA_PATH = CURR_PATH / "data"
 
-print(all_mfcc_features.shape)
+def Report(best_model):
+    # svc document said predict_proba and predict can be inconsistent
+    y_train_pred = best_model.predict(X_train_transformed)
+    train_report = best_model.report(y_train, y_train_pred, when="Training")["report"]
+    y_test_pred = best_model.predict(X_test_transformed)
+    test_report = best_model.report(y_test, y_test_pred, when="Test")["report"]
+    print(train_report, test_report, sep="\n")
 
-all_mfcc_features_normalized = minmax_scale(all_mfcc_features, feature_range=(0, 1))
+if __name__ == "__main__":
+    print("Welcome to Project VocDet")
+    print("VocDet version: ", PROGRAM_VERSION)
 
-plt.figure(figsize=(12, 6))
-sns.heatmap(all_mfcc_features_normalized, cmap='viridis', cbar=True)
-plt.title('MFCC Min-Max Normalizasyonu')
-plt.xlabel('MFCC')
-plt.ylabel('Ses Dosyaları')
-plt.show()
+    extractZipToDataFolder(ZIP_PATH, DATA_PATH)
+    speech_speaker_df = dataLoader(DATA_PATH)
+    X_train, X_val, X_test, y_train, y_val, y_test = train_val_test_split_openset(speech_speaker_df, cc_val=True)
 
-n_components = 2
-pca = PCA(n_components=n_components)
-all_mfcc_features_pca = pca.fit_transform(all_mfcc_features_normalized)
+    X_train = pd.concat([X_train, X_val], axis= 0)
+    y_train = pd.concat([y_train, y_val])
 
-plt.figure(figsize=(12, 6))
-plt.scatter(all_mfcc_features_pca[:, 0], all_mfcc_features_pca[:, 1], c='blue', edgecolor='k', alpha=0.5)
-plt.title(f'PCA Dönüşümü (Top {n_components} Components)')
-plt.xlabel('Component 1')
-plt.ylabel('Component 2')
-plt.grid(True)
-plt.show()
+    pre_processing_pipe = Pipeline(steps= [
+        ("fe_librosa", FeatureExtractionWithLibrosa()),
+        ("pca", PCAUncompatibleShapes(row_mfcc= 13)), 
+        ("flatten", FunctionTransformer(flattenLastTwoDim)),
+        # ("scaler", StandardScaler())
+        ("scaler", MinMaxScaler(feature_range=(0, 1))),
+    ])
 
-labels = []
+    print("Preprocessing data.\n[WARNING] This will take some time.")
+    X_train_transformed = pre_processing_pipe.fit_transform(X_train)
+    X_test_transformed = pre_processing_pipe.fit_transform(X_test)
+    print("Preprocessing the data: SUCCESS")
 
-for subdir, dirs, files in os.walk(dataset_dir):
-    for file in files:
-        if file.endswith('.wav'):
-            label = int(os.path.basename(subdir)[-4:])
-            labels.append(label)
+    
 
-X_train, X_test, y_train, y_test = train_test_split(all_mfcc_features_pca, labels, test_size=0.2, random_state=42)
+    svc = SVC(C= 5,kernel= "linear" , probability= True)
+    rf = RandomForestClassifier(n_estimators=10, n_jobs= -1, min_samples_split=10)
+    knn = KNeighborsClassifier(n_neighbors= 10, n_jobs= -1)
 
-linear_svc_model = LinearSVC(C=1.0, max_iter=1000, random_state=42)
-linear_svc_model.fit(X_train, y_train)
-y_pred = linear_svc_model.predict(X_test)
+    print("SVC")
+    svc_scores_dict, svc_thresholds, svc_best_model = cross_class_validation(svc, X_train_transformed, y_train, k_folds= 3)
 
-accuracy = accuracy_score(y_test, y_pred)
-plt.figure(figsize=(6, 4))
-sns.barplot(x=["Accuracy"], y=[accuracy * 100])
-plt.ylim(0, 100)
-plt.title("Model Accuracy")
-plt.ylabel("Accuracy (%)")
-plt.show()
+    print("RF")
+    rf_scores_dict, rf_thresholds, rf_best_model = cross_class_validation(rf, X_train_transformed, y_train, k_folds= 3)
 
-conf_matrix = confusion_matrix(y_test, y_pred)
-plt.figure(figsize=(8, 6))
-sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
-plt.title("Karışıklık Matrisi")
-plt.xlabel("Tahmin Edilen")
-plt.ylabel("Gerçek")
-plt.show()
+    print("KNN")
+    knn_scores_dict, knn_thresholds, knn_best_model = cross_class_validation(knn, X_train_transformed, y_train, k_folds= 3)
+    
+    Report(svc_best_model)
+    Report(rf_best_model)
+    Report(knn_best_model)
+
+
