@@ -23,10 +23,8 @@ def print_commands(ls):
 def main_menu():
     ls = ["back","help", "quit", "exit", "enrollment", "verify", "identify", "clear", "ls"]
     while True:
-        print("""
-        lalalalalalllalallalaldsjkfalllllllll
-        dsk;lfajjjjjjjjjjj ...l.
-        """)
+        # print("""
+        # """)
         ans = input(">>> ").strip().lower()
 
         if ans == "back":
@@ -102,11 +100,13 @@ def enrollment_opt_menu(enroll_name:str):
     while True:
         ans = input(f"(enrollment/{enroll_name}) >>> ").strip().lower()
         if ans == "back":
-            ans1 = input("You modified this enrollment do you want to update its model? (y/n): ")
-            if ans1 == "y":
-                current_enrollments[enroll_name].updateModel()
-                modified_enrollments.remove(enroll_name)
+            if  enroll_name in modified_enrollments:
+                ans1 = input("You modified this enrollment do you want to update its model? (y/n): ")
+                if ans1 == "y":
+                    current_enrollments[enroll_name].updateModel()
+                    modified_enrollments.remove(enroll_name)
             return False
+
         elif ans == "help":
             print_info()
         elif ans in ["quit", "exit"]:
@@ -121,8 +121,6 @@ def enrollment_opt_menu(enroll_name:str):
             print_commands(ls)
         elif ans == "clear":
             os.system('cls' if os.name == 'nt' else 'clear')
-        elif ans == "update":
-            current_enrollments[enroll_name].updateModel()
         else:
             print("Unknown Command. Please try again.")
 
@@ -318,7 +316,7 @@ def handle_verification(enroll_name, claimed_speaker_name):
         X = current_enrollments[enroll_name].preprocessing.transform(np.array([filename]))
         id_pred = current_enrollments[enroll_name].model.predict(X)
         if id_pred == -1:
-            print("Verification failed")
+            print("Speaker is unknown")
         else:
             try:
                 id_claimed = current_enrollments[enroll_name].known_speakers[claimed_speaker_name].id
